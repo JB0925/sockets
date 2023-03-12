@@ -82,7 +82,7 @@ class TCPServer:
         print(f"Sending {parsed_request_headers} back to {remote_address.ip_address}:{remote_address.port}\n")
 
     def _parse_true_destination_and_get_data(self, parsed_request_headers: bytes) -> bytes:
-        true_destination = json.loads(parsed_request_headers.decode("ascii"))["X-Forwarded-For"]
+        true_destination: str = json.loads(parsed_request_headers.decode("ascii"))["X-Forwarded-For"]
         proxy_socket: socket.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         dest_host, dest_port = true_destination.split(":")
         proxy_socket.connect((dest_host, int(dest_port)))
