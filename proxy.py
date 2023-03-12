@@ -87,7 +87,11 @@ class TCPServer:
         dest_host, dest_port = true_destination.split(":")
         proxy_socket.connect((dest_host, int(dest_port)))
 
-           # NOTE: The call to sendall with the "\r\n formats is really important"
+        """
+        NOTE: The format of the "sendall" call directly below. This is because,
+        if it is sent in a different way, it will be interpreted as HTTP/0.9,
+        which is not allowed by curl.
+        """
         proxy_socket.sendall(b"GET / HTTP/1.1\r\nHost: 127.0.0.1:8000\r\n\r\n")
         return_data: bytes = proxy_socket.recv(1500)
         proxy_socket.close()
