@@ -93,7 +93,7 @@ class TCPServer:
         which is not allowed by curl.
         """
         proxy_socket.sendall(b"GET / HTTP/1.1\r\nHost: 127.0.0.1:8000\r\n\r\n")
-        return_data: bytes = proxy_socket.recv(1500)
+        return_data: bytes = proxy_socket.recv(MAXIMUM_TRANSMISSIBLE_UNIT)
         proxy_socket.close()
         return return_data
 
