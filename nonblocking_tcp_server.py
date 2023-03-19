@@ -42,6 +42,13 @@ class TCPServer:
         self._sock.setblocking(0)
         self._selector.register(self._sock, selectors.EVENT_READ, data=None)
 
+    def _get_content_length_from_client(self, recv_data: bytes) -> int:
+        cl_header = recv_data.split(b"\r\n")[1:]
+        for item in cl_header:
+            if b"Content-Length" in item:
+                return int(item.split(b": ")[1])
+
+
     def accept_connections_and_echo(self):
         self._bind_and_listen()
 
@@ -56,6 +63,9 @@ class TCPServer:
                       a SimpleNameSpace containing:
                         - remote address
                         - data (outbound data buffer, inbound data buffer)
+                        - a "read_idx", which marks the bytes read so far
+                        - an "end_idx", which marks the total amount of bytes, taken
+                          from the client's "Content-Length" header
             
             We set "setblocking" to False here, just as we did with the listening socket above.
             """
@@ -68,7 +78,9 @@ class TCPServer:
                     data: types.SimpleNamespace = types.SimpleNamespace(
                         addr=remote_address,
                         inbound_data = b"",
-                        outbound_data = b""
+                        outbound_data = b"",
+                        read_idx = 0,
+                        end_idx = 0
                     )
                     """
                     By default, a socket registered in "select" has data=None
@@ -93,14 +105,26 @@ class TCPServer:
                     If the remote socket is waiting to be read:
                         - call recv on the remote socket to get data from it
                         - check to see if it is not None
-                            - if not, add the new data to the data object's outbound_data buffer
+                            - if not:
+                                - first time through, get the content-length sent by client
+                                - add the new data to the data object's outbound_data buffer
+                                - increase the read_idx by adding the recv_data size to it
+                                - if the "read_idx" is >= the "end_idx" (total amount of content sent by client),
+                                  then we know we are finished, and we can add the b"HTTP/1.1 200 OK\r\n\r\n" response.
                         
                         - otherwise, it's already been read and we can close the connection
                     """
                     if mask & selectors.EVENT_READ:
                         recv_data: bytes = remote_sock.recv(MAXIMUM_TRANSMISSIBLE_UNIT)
+                        if not data.end_idx:
+                            data.end_idx = self._get_content_length_from_client(recv_data)
+
                         if recv_data:
                             data.outbound_data += recv_data
+                            data.read_idx += len(recv_data)
+                            if data.read_idx >= data.end_idx:
+                                data.outbound_data += b"\r\nHTTP/1.1 200 OK\r\n\r\n"
+                            
                         else:
                             print(f"Closing connection to {data.addr}")
                             self._selector.unregister(sock)
@@ -110,18 +134,18 @@ class TCPServer:
                     If the remote socket is waiting to be written to:
                         - check to see if there is outbound data to send
                         - if so, loop over the data and send it back
-                        - finally, unregister the socket with the selector and then close the socket.
+                        - finally, unregister the socket with the selector and then close the socket
+                          once all of the data has been sent.
                     """
                     if mask & selectors.EVENT_WRITE:
                         if data.outbound_data:
                             print(f"Echoing {data.outbound_data} to {data.addr}")
-                            while data.outbound_data:
-                                sent: int = sock.send(data.outbound_data)
-                                data.outbound_data = data.outbound_data[sent:]
+                            sent: int = sock.send(data.outbound_data)
+                            data.outbound_data = data.outbound_data[sent:]
 
+                        if data.read_idx >= data.end_idx:
                             self._selector.unregister(sock)
-                            if sent and not data.outbound_data:
-                                sock.close()
+                            sock.close()
 
 
 if __name__ == "__main__":
