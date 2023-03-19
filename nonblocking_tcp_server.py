@@ -15,6 +15,7 @@ SERVER_ADDRESS: Final[str] = "127.0.0.1"
 SERVER_PORT: Final[int] = 27685
 DEFAULT_SERVER_ADDRESS: Address = Address(SERVER_ADDRESS, SERVER_PORT)
 MAXIMUM_TRANSMISSIBLE_UNIT: int = 1500
+ZERO_CONTENT_LENGTH: Final[int] = 0
 
 
 class TCPServer:
@@ -47,6 +48,8 @@ class TCPServer:
         for item in cl_header:
             if b"Content-Length" in item:
                 return int(item.split(b": ")[1])
+
+        return ZERO_CONTENT_LENGTH
 
 
     def accept_connections_and_echo(self):
